@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ATS Resume Builder</title>
+<style>
+  :root {
+    --bg: #eef1f4; --panel: #ffffff; --ink: #1c2530; --muted: #5d6b7a;
+    --line: #d5dce3; --accent: #1f5f8b; --accent-ink: #ffffff; --danger: #b3261e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #12171c; --panel: #1b222a; --ink: #e6ebf0; --muted: #98a6b5; --line: #2e3945; --accent: #5aa7d6; --accent-ink: #0c1a24; --danger: #f2b8b5; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, Arial, sans-serif; background: var(--bg); color: var(--ink); }
+  header.bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  header.bar h1 { font-size: 18px; margin: 0; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  button { font: inherit; cursor: pointer; border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 8px 14px; border-radius: 6px; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  button.small { padding: 4px 10px; font-size: 13px; }
+  button.danger { color: var(--danger); }
+  button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  main { display: grid; grid-template-columns: minmax(300px, 460px) 1fr; gap: 20px; padding: 20px; max-width: 1400px; margin: 0 auto; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .editor { display: flex; flex-direction: column; gap: 14px; }
+  fieldset { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 12px 14px 14px; margin: 0; }
+  legend { font-weight: 700; padding: 0 6px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin-top: 8px; }
+  input, textarea, select { width: 100%; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 7px 9px; margin-top: 3px; }
+  textarea { resize: vertical; min-height: 70px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .entry { border-top: 1px dashed var(--line); margin-top: 12px; padding-top: 4px; }
+  .entry-head { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; font-size: 13px; color: var(--muted); }
+  .hint { font-size: 12px; color: var(--muted); margin: 6px 0 0; }
+  .score { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+  .score h2 { font-size: 15px; margin: 0 0 6px; }
+  .score ul { margin: 6px 0 0; padding-left: 18px; font-size: 13px; }
+  .score li.ok { color: var(--muted); }
+  .score li.bad { color: var(--danger); }
+  .meter { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+  .meter > div { height: 100%; background: var(--accent); width: 0; transition: width .2s; }
+
+  .preview-wrap { overflow: auto; }
+  /* Resume page: single column, standard fonts, no tables/images/icons for ATS */
+  #resume { background: #fff; color: #000; width: 8.5in; min-height: 11in; margin: 0 auto; padding: 0.6in 0.7in; font-family: Arial, Helvetica, sans-serif; font-size: 10.5pt; line-height: 1.35; box-shadow: 0 2px 12px rgba(0,0,0,.18); }
+  #resume h1 { font-size: 20pt; margin: 0 0 2px; text-align: center; }
+  #resume .contact { text-align: center; font-size: 10pt; margin-bottom: 10px; }
+  #resume h2 { font-size: 11.5pt; text-transform: uppercase; border-bottom: 1.5px solid #000; margin: 14px 0 6px; padding-bottom: 2px; letter-spacing: .04em; }
+  #resume .line { display: flex; justify-content: space-between; gap: 12px; font-weight: bold; }
+  #resume .sub { font-style: italic; }
+  #resume ul { margin: 3px 0 8px; padding-left: 18px; }
+  #resume p { margin: 0 0 6px; }
+  #resume a { color: #000; text-decoration: none; }
+  #resume .item { margin-bottom: 6px; }
+
+  @media print {
+    @page { size: Letter; margin: 0; }
+    body { background: #fff; }
+    header.bar, .editor { display: none !important; }
+    main { display: block; padding: 0; max-width: none; }
+    .preview-wrap { overflow: visible; }
+    #resume { box-shadow: none; margin: 0; width: auto; min-height: 0; padding: 0.6in 0.7in; }
+  }
+</style>
+</head>
+<body>
+<header class="bar">
+  <h1>ATS Resume Builder</h1>
+  <div class="actions">
+    <button id="loadSample">Load sample</button>
+    <button id="exportJson">Save data (.json)</button>
+    <button id="importJson">Open data</button>
+    <button id="clearAll" class="danger">Clear all</button>
+    <button id="printBtn" class="primary">Download PDF</button>
+    <input type="file" id="fileInput" accept="application/json" hidden>
+  </div>
+</header>
+
+<main>
+  <section class="editor" aria-label="Resume editor">
+    <div class="score" aria-live="polite">
+      <h2>ATS checklist: <span id="scoreText">0%</span></h2>
+      <div class="meter"><div id="meterBar"></div></div>
+      <ul id="checks"></ul>
+    </div>
+
+    <fieldset>
+      <legend>Contact</legend>
+      <label>Full name<input id="name" autocomplete="name"></label>
+      <label>Job title<input id="title" placeholder="e.g. Software Engineer"></label>
+      <div class="row">
+        <label>Email<input id="email" type="email" autocomplete="email"></label>
+        <label>Phone<input id="phone" autocomplete="tel"></label>
+      </div>
+      <div class="row">
+        <label>Location<input id="location" placeholder="City, State/Country"></label>
+        <label>LinkedIn / Website<input id="link" placeholder="linkedin.com/in/you"></label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Summary</legend>
+      <label>Professional summary<textarea id="summary" placeholder="2–3 sentences with your role, years of experience and key skills"></textarea></label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Experience</legend>
+      <div id="expList"></div>
+      <button class="small" data-add="exp" style="margin-top:10px">Add job</button>
+    </fieldset>
+
+    <fieldset>
+      <legend>Education</legend>
+      <div id="eduList"></div>
+      <button class="small" data-add="edu" style="margin-top:10px">Add education</button>
+    </fieldset>
+
+    <fieldset>
+      <legend>Skills</legend>
+      <label>Skills (comma separated)<textarea id="skills" placeholder="JavaScript, Project Management, SQL"></textarea></label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Certifications &amp; projects</legend>
+      <label>One per line<textarea id="extras" placeholder="AWS Certified Developer – 2024"></textarea></label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Job description match</legend>
+      <label>Paste the job description<textarea id="jd" placeholder="Paste the posting to see which keywords your resume is missing"></textarea></label>
+      <p class="hint" id="kwResult"></p>
+    </fieldset>
+  </section>
+
+  <section class="preview-wrap" aria-label="Resume preview">
+    <article id="resume"></article>
+  </section>
+</main>
+
+<script>
+(function () {
+  var KEY = 'ats-resume-data';
+  var state = blank();
+
+  function blank() {
+    return { name:'', title:'', email:'', phone:'', location:'', link:'', summary:'', skills:'', extras:'', jd:'', exp:[], edu:[] };
+  }
+  function sample() {
+    return {
+      name:'Jordan Rivera', title:'Full Stack Developer', email:'jordan.rivera@example.com', phone:'+1 555 010 4477', location:'Austin, TX', link:'linkedin.com/in/jordanrivera',
+      summary:'Full stack developer with 5 years of experience building web applications in JavaScript, React and Node.js. Reduced page load time by 40% and led a team of 4 engineers.',
+      skills:'JavaScript, TypeScript, React, Node.js, SQL, REST APIs, Git, Agile',
+      extras:'AWS Certified Developer – Associate, 2024',
+      jd:'',
+      exp:[{ role:'Software Engineer', company:'Brightline Tech', loc:'Austin, TX', start:'Jan 2022', end:'Present', bullets:'Built a React dashboard used by 12,000 customers\nCut API response time by 35% by optimizing SQL queries\nMentored 3 junior developers' }],
+      edu:[{ degree:'B.S. Computer Science', school:'University of Texas', loc:'Austin, TX', start:'2015', end:'2019', notes:'' }]
+    };
+  }
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+  function load() {
+    try { var raw = localStorage.getItem(KEY); if (raw) state = Object.assign(blank(), JSON.parse(raw)); } catch (e) {}
+  }
+
+  var simple = ['name','title','email','phone','location','link','summary','skills','extras','jd'];
+
+  function bindSimple() {
+    simple.forEach(function (k) {
+      var el = $(k); el.value = state[k] || '';
+      el.addEventListener('input', function () { state[k] = el.value; update(); });
+    });
+  }
+
+  function expHtml(e, i) {
+    return '<div class="entry" data-i="' + i + '" data-type="exp">' +
+      '<div class="entry-head"><span>Job ' + (i + 1) + '</span><button class="small danger" data-del="exp" data-i="' + i + '">Remove</button></div>' +
+      '<div class="row"><label>Job title<input data-f="role" value="' + esc(e.role).replace(/"/g, '&quot;') + '"></label>' +
+      '<label>Company<input data-f="company" value="' + esc(e.company).replace(/"/g, '&quot;') + '"></label></div>' +
+      '<div class="row"><label>Start<input data-f="start" placeholder="Jan 2022" value="' + esc(e.start).replace(/"/g, '&quot;') + '"></label>' +
+      '<label>End<input data-f="end" placeholder="Present" value="' + esc(e.end).replace(/"/g, '&quot;') + '"></label></div>' +
+      '<label>Location<input data-f="loc" value="' + esc(e.loc).replace(/"/g, '&quot;') + '"></label>' +
+      '<label>Achievements (one per line, start with a verb, add numbers)<textarea data-f="bullets">' + esc(e.bullets) + '</textarea></label></div>';
+  }
+  function eduHtml(e, i) {
+    return '<div class="entry" data-i="' + i + '" data-type="edu">' +
+      '<div class="entry-head"><span>Education ' + (i + 1) + '</span><button class="small danger" data-del="edu" data-i="' + i + '">Remove</button></div>' +
+      '<div class="row"><label>Degree<input data-f="degree" value="' + esc(e.degree).replace(/"/g, '&quot;') + '"></label>' +
+      '<label>School<input data-f="school" value="' + esc(e.school).replace(/"/g, '&quot;') + '"></label></div>' +
+      '<div class="row"><label>Start<input data-f="start" value="' + esc(e.start).replace(/"/g, '&quot;') + '"></label>' +
+      '<label>End<input data-f="end" value="' + esc(e.end).replace(/"/g, '&quot;') + '"></label></div>' +
+      '<label>Location<input data-f="loc" value="' + esc(e.loc).replace(/"/g, '&quot;') + '"></label>' +
+      '<label>Notes (GPA, honors)<input data-f="notes" value="' + esc(e.notes).replace(/"/g, '&quot;') + '"></label></div>';
+  }
+
+  function renderLists() {
+    $('expList').innerHTML = state.exp.map(expHtml).join('') || '<p class="hint">No jobs yet.</p>';
+    $('eduList').innerHTML = state.edu.map(eduHtml).join('') || '<p class="hint">No education yet.</p>';
+  }
+
+  document.addEventListener('input', function (ev) {
+    var t = ev.target, f = t.getAttribute && t.getAttribute('data-f');
+    if (!f) return;
+    var box = t.closest('.entry'), i = +box.getAttribute('data-i'), type = box.getAttribute('data-type');
+    state[type][i][f] = t.value; update();
+  });
+  document.addEventListener('click', function (ev) {
+    var t = ev.target;
+    if (t.getAttribute('data-add') === 'exp') { state.exp.push({ role:'', company:'', loc:'', start:'', end:'', bullets:'' }); renderLists(); update(); }
+    if (t.getAttribute('data-add') === 'edu') { state.edu.push({ degree:'', school:'', loc:'', start:'', end:'', notes:'' }); renderLists(); update(); }
+    var del = t.getAttribute('data-del');
+    if (del) { state[del].splice(+t.getAttribute('data-i'), 1); renderLists(); update(); }
+  });
+
+  function dates(s, e) { return [s, e].filter(Boolean).join(' – '); }
+  function lines(s) { return (s || '').split('\n').map(function (x) { return x.trim().replace(/^[-•*]\s*/, ''); }).filter(Boolean); }
+
+  function renderResume() {
+    var s = state, h = '';
+    h += '<h1>' + esc(s.name || 'Your Name') + '</h1>';
+    var contact = [s.location, s.phone, s.email, s.link].filter(Boolean).map(esc).join(' | ');
+    h += '<div class="contact">' + (s.title ? esc(s.title) + '<br>' : '') + contact + '</div>';
+    if (s.summary.trim()) h += '<h2>Professional Summary</h2><p>' + esc(s.summary) + '</p>';
+    if (s.skills.trim()) h += '<h2>Skills</h2><p>' + s.skills.split(',').map(function (x) { return esc(x.trim()); }).filter(Boolean).join(', ') + '</p>';
+    if (s.exp.length) {
+      h += '<h2>Work Experience</h2>';
+      s.exp.forEach(function (e) {
+        h += '<div class="item"><div class="line"><span>' + esc(e.role) + '</span><span>' + esc(dates(e.start, e.end)) + '</span></div>' +
+             '<div class="sub">' + esc([e.company, e.loc].filter(Boolean).join(', ')) + '</div>';
+        var b = lines(e.bullets);
+        if (b.length) h += '<ul>' + b.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>';
+        h += '</div>';
+      });
+    }
+    if (s.edu.length) {
+      h += '<h2>Education</h2>';
+      s.edu.forEach(function (e) {
+        h += '<div class="item"><div class="line"><span>' + esc(e.degree) + '</span><span>' + esc(dates(e.start, e.end)) + '</span></div>' +
+             '<div>' + esc([e.school, e.loc].filter(Boolean).join(', ')) + (e.notes ? ' – ' + esc(e.notes) : '') + '</div></div>';
+      });
+    }
+    var ex = lines(s.extras);
+    if (ex.length) h += '<h2>Certifications &amp; Projects</h2><ul>' + ex.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>';
+    $('resume').innerHTML = h;
+  }
+
+  function plainText() { return $('resume').innerText.toLowerCase(); }
+
+  function checklist() {
+    var s = state, txt = plainText();
+    var bullets = s.exp.reduce(function (n, e) { return n + lines(e.bullets).length; }, 0);
+    var hasNumbers = s.exp.some(function (e) { return /\d/.test(e.bullets); });
+    var items = [
+      ['Name, email and phone added', !!(s.name && s.email && s.phone)],
+      ['Professional summary added', s.summary.trim().length > 40],
+      ['Work experience with dates', s.exp.length > 0 && s.exp.every(function (e) { return e.role && e.start; })],
+      ['3+ achievement bullets', bullets >= 3],
+      ['Achievements include numbers', hasNumbers],
+      ['Skills section has 5+ skills', s.skills.split(',').filter(function (x) { return x.trim(); }).length >= 5],
+      ['Education added', s.edu.length > 0 && !!s.edu[0].degree],
+      ['Email looks valid', /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s.email)]
+    ];
+    var ok = items.filter(function (i) { return i[1]; }).length;
+    var pct = Math.round(ok / items.length * 100);
+    $('scoreText').textContent = pct + '%';
+    $('meterBar').style.width = pct + '%';
+    $('checks').innerHTML = items.map(function (i) { return '<li class="' + (i[1] ? 'ok' : 'bad') + '">' + (i[1] ? 'Done: ' : 'To do: ') + i[0] + '</li>'; }).join('');
+  }
+
+  var STOP = 'the a an and or of to in for with on at by from as is are be will you your our we this that it their they have has can into about over more must should may such who which etc also within across including using use work working role team years year experience ability strong skills'.split(' ');
+  function keywords() {
+    var jd = state.jd.toLowerCase();
+    if (!jd.trim()) { $('kwResult').textContent = 'Paste a job description to see missing keywords.'; return; }
+    var words = jd.match(/[a-z][a-z+#.\-]{2,}/g) || [], freq = {};
+    words.forEach(function (w) { w = w.replace(/[.\-]+$/, ''); if (STOP.indexOf(w) < 0 && w.length > 2) freq[w] = (freq[w] || 0) + 1; });
+    var top = Object.keys(freq).sort(function (a, b) { return freq[b] - freq[a]; }).slice(0, 20);
+    var txt = plainText();
+    var missing = top.filter(function (w) { return txt.indexOf(w) < 0; });
+    $('kwResult').textContent = missing.length ? 'Missing keywords: ' + missing.join(', ') : 'Your resume covers the top keywords in this job description.';
+  }
+
+  function update() { renderResume(); checklist(); keywords(); save(); }
+
+  function setState(next) { state = Object.assign(blank(), next); simple.forEach(function (k) { $(k).value = state[k] || ''; }); renderLists(); update(); }
+
+  $('loadSample').onclick = function () { setState(sample()); };
+  $('clearAll').onclick = function () { if (confirm('Delete all resume data?')) setState(blank()); };
+  $('printBtn').onclick = function () { var old = document.title; document.title = (state.name || 'Resume').replace(/\s+/g, '_') + '_Resume'; window.print(); document.title = old; };
+  $('exportJson').onclick = function () {
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' }));
+    a.download = 'resume-data.json'; a.click(); URL.revokeObjectURL(a.href);
+  };
+  $('importJson').onclick = function () { $('fileInput').click(); };
+  $('fileInput').onchange = function (e) {
+    var f = e.target.files[0]; if (!f) return;
+    var r = new FileReader();
+    r.onload = function () { try { setState(JSON.parse(r.result)); } catch (err) { alert('That file is not valid resume data.'); } };
+    r.readAsText(f); e.target.value = '';
+  };
+
+  load();
+  if (!state.name && !state.exp.length && !state.edu.length) state = sample();
+  bindSimple(); renderLists(); update();
+})();
+</script>
+</body>
+</html>
